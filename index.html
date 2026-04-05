@@ -544,7 +544,7 @@
 // ══════════════════════════════════════════════════════
 // 🔧 GANTI URL INI dengan URL deployment Apps Script kamu
 // ══════════════════════════════════════════════════════
-const SHEETS_URL = 'PASTE_URL_DISINI';
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwJNR9_8a_JSzT6YYiqsJYOezDbpP-5uuIUc7a6_ZYISQbDvkM8Yk3rw7SHQAg0nVYF/exec';
 // Contoh: 'https://script.google.com/macros/s/AKfycbxXXXXX/exec'
 // ══════════════════════════════════════════════════════
 
@@ -573,7 +573,7 @@ function showLoading(show) {
 
 // ── GOOGLE SHEETS API ──
 async function sheetsGet(params) {
-  if (!SHEETS_URL || SHEETS_URL === 'https://script.google.com/macros/s/AKfycbwJNR9_8a_JSzT6YYiqsJYOezDbpP-5uuIUc7a6_ZYISQbDvkM8Yk3rw7SHQAg0nVYF/exec') {
+  if (!SHEETS_URL || SHEETS_URL === 'PASTE_URL_DISINI') {
     throw new Error('URL Google Sheets belum diisi di kode!');
   }
   const url = SHEETS_URL + '?' + new URLSearchParams(params).toString();
