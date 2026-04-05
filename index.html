@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Catatan Ternak</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --green-dark: #1a3a2a;
+    --green-mid: #2d6a4f;
+    --green-light: #52b788;
+    --green-pale: #d8f3dc;
+    --amber: #e9a800;
+    --amber-light: #fff3cd;
+    --red: #c0392b;
+    --red-light: #fdecea;
+    --blue: #2980b9;
+    --blue-light: #e8f4fd;
+    --white: #ffffff;
+    --gray-1: #f7f8f5;
+    --gray-2: #edf0ea;
+    --gray-3: #c8d5c0;
+    --gray-4: #6b7c6a;
+    --text: #1a2e1a;
+    --text-soft: #5a6e58;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 4px 20px rgba(26,58,42,0.10);
+    --shadow-sm: 0 2px 8px rgba(26,58,42,0.08);
+    --nav-h: 68px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--gray-1);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: var(--nav-h);
+    overflow-x: hidden;
+  }
+
+  /* ── LOADING OVERLAY ── */
+  #loading-overlay {
+    position: fixed; inset: 0; background: rgba(255,255,255,0.95);
+    z-index: 999; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px; transition: opacity 0.3s;
+  }
+  #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+  .loading-icon { font-size: 48px; animation: bounce 0.8s infinite alternate; }
+  @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+  .loading-text { font-size: 15px; font-weight: 700; color: var(--green-mid); }
+  .loading-sub  { font-size: 12px; color: var(--text-soft); }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-mid) 100%);
+    padding: 16px 20px 14px;
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar-title { color: #fff; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+  .topbar-date  { color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 500; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .sync-btn {
+    border: none; background: rgba(255,255,255,0.15); color: #fff;
+    border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 700;
+    font-family: inherit; cursor: pointer; transition: background 0.2s;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .sync-btn:active { background: rgba(255,255,255,0.3); }
+  .sync-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #52b788;
+    flex-shrink: 0;
+  }
+  .sync-dot.syncing { background: var(--amber); animation: pulse 0.8s infinite; }
+  .sync-dot.error   { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h);
+    background: var(--white); border-top: 1px solid var(--gray-2);
+    display: flex; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; cursor: pointer; transition: all 0.2s; padding: 8px 4px;
+    border: none; background: none; font-family: inherit;
+  }
+  .nav-item .nav-icon  { font-size: 22px; transition: transform 0.2s; }
+  .nav-item .nav-label { font-size: 10px; font-weight: 600; color: var(--gray-4); transition: color 0.2s; }
+  .nav-item.active .nav-icon  { transform: translateY(-2px); }
+  .nav-item.active .nav-label { color: var(--green-mid); }
+  .nav-item.active { position: relative; }
+  .nav-item.active::before {
+    content: ''; position: absolute; top: 0; left: 20%; right: 20%;
+    height: 3px; background: var(--green-mid); border-radius: 0 0 4px 4px;
+  }
+
+  /* ── PAGES ── */
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  /* ── SECTION HEADER ── */
+  .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; margin-top: 6px; }
+  .section-icon {
+    width: 38px; height: 38px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .section-icon.green { background: var(--green-pale); }
+  .section-icon.amber { background: var(--amber-light); }
+  .section-icon.blue  { background: var(--blue-light); }
+  .section-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .section-sub   { font-size: 12px; color: var(--text-soft); font-weight: 500; margin-top: 1px; }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--white); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow-sm);
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; color: var(--green-dark);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--green-pale);
+  }
+
+  /* ── FORM ── */
+  .form-row        { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+  .form-group      { display: flex; flex-direction: column; gap: 5px; }
+  .form-label {
+    font-size: 11px; font-weight: 600; color: var(--text-soft);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .form-input {
+    border: 1.5px solid var(--gray-2); border-radius: var(--radius-sm);
+    padding: 10px 12px; font-size: 14px; font-family: inherit;
+    background: var(--gray-1); color: var(--text);
+    transition: border-color 0.2s, background 0.2s;
+    outline: none; width: 100%;
+  }
+  .form-input:focus { border-color: var(--green-mid); background: #fff; }
+  select.form-input { cursor: pointer; }
+  textarea.form-input { resize: none; height: 72px; }
+
+  .sub-label {
+    font-size: 11px; font-weight: 700; color: var(--green-mid);
+    background: var(--green-pale); border-radius: 6px;
+    padding: 4px 10px; margin: 12px 0 10px; display: inline-block;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    border: none; border-radius: var(--radius-sm);
+    padding: 13px 20px; font-size: 14px; font-weight: 700;
+    font-family: inherit; cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+  }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-primary { background: var(--green-mid); color: #fff; }
+  .btn-primary:active { background: var(--green-dark); transform: scale(0.98); }
+  .btn-amber   { background: var(--amber); color: #fff; }
+  .btn-amber:active { background: #c98a00; transform: scale(0.98); }
+  .btn-outline { background: transparent; color: var(--green-mid); border: 2px solid var(--green-mid); }
+  .btn-outline:active { background: var(--green-pale); }
+  .btn-sm { padding: 8px 14px; font-size: 12px; width: auto; }
+
+  /* ── TABS ── */
+  .tab-bar { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 12px; scrollbar-width: none; margin-bottom: 4px; }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex-shrink: 0; border: none; background: var(--gray-2);
+    border-radius: 20px; padding: 8px 16px;
+    font-size: 13px; font-weight: 600; color: var(--gray-4);
+    cursor: pointer; transition: all 0.2s; font-family: inherit;
+  }
+  .tab-btn.active { background: var(--green-mid); color: #fff; }
+  .tab-content        { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-sm); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 400px; }
+  th { background: var(--green-dark); color: #fff; padding: 9px 10px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--gray-2); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: var(--gray-1); }
+  .no-data { text-align: center; color: var(--text-soft); padding: 24px; font-size: 13px; }
+
+  /* ── SUMMARY CARDS ── */
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .summary-card { background: var(--white); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow-sm); }
+  .summary-card .s-label { font-size: 11px; color: var(--text-soft); font-weight: 600; margin-bottom: 4px; }
+  .summary-card .s-value { font-size: 22px; font-weight: 800; color: var(--green-dark); }
+  .summary-card .s-unit  { font-size: 11px; color: var(--text-soft); font-weight: 500; }
+  .summary-card.accent   { background: linear-gradient(135deg, var(--green-mid), var(--green-dark)); }
+  .summary-card.accent .s-label,
+  .summary-card.accent .s-value,
+  .summary-card.accent .s-unit { color: #fff; }
+
+  /* ── DELETE BUTTON ── */
+  .del-btn {
+    border: none; background: var(--red-light); color: var(--red);
+    border-radius: 6px; width: 28px; height: 28px; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+  }
+  .del-btn:active { background: var(--red); color: #fff; }
+
+  /* ── AMOUNT ── */
+  .amount-pos { color: var(--green-mid); font-weight: 700; }
+  .amount-neg { color: var(--red); font-weight: 700; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: calc(var(--nav-h) + 16px); left: 50%; transform: translateX(-50%);
+    background: var(--green-dark); color: #fff;
+    padding: 12px 20px; border-radius: 30px; font-size: 13px; font-weight: 600;
+    z-index: 200; opacity: 0; transition: opacity 0.3s;
+    white-space: nowrap; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ── INFO CHIP ── */
+  .info-chip {
+    background: var(--blue-light); color: var(--blue);
+    border-radius: 10px; padding: 10px 14px; font-size: 12px;
+    font-weight: 600; margin-bottom: 14px; line-height: 1.6;
+  }
+
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <div class="loading-icon">🐓</div>
+  <div class="loading-text">Memuat data dari Google Sheets...</div>
+  <div class="loading-sub">Mohon tunggu sebentar</div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">🐓 Catatan Ternak</div>
+    <div class="topbar-date" id="todayDate"></div>
+  </div>
+  <div class="topbar-right">
+    <button class="sync-btn" onclick="reloadData()">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="syncLabel">Sinkron</span>
+    </button>
+  </div>
+</div>
+
+<!-- ===== PAGE: TERNAK ===== -->
+<div class="page active" id="page-ternak">
+  <div class="section-header">
+    <div class="section-icon green">🐔</div>
+    <div>
+      <div class="section-title">Data Stok Ternak</div>
+      <div class="section-sub">Input jumlah hewan per hari</div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTernakTab('ayam', this)">🐓 Ayam Kampung</button>
+    <button class="tab-btn" onclick="switchTernakTab('bebek', this)">🦆 Bebek</button>
+    <button class="tab-btn" onclick="switchTernakTab('mentok', this)">🦢 Mentok</button>
+    <button class="tab-btn" onclick="switchTernakTab('angsa', this)">🪿 Angsa</button>
+  </div>
+
+  <!-- AYAM -->
+  <div class="tab-content active" id="tab-ayam">
+    <div class="card">
+      <div class="card-title">Input Ayam Kampung</div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label class="form-label">Tanggal</label>
+          <input type="date" class="form-input" id="ayam-tgl">
+        </div>
+      </div>
+      <span class="sub-label">Ayam Kampung</span>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Betina Dewasa</label><input type="number" class="form-input" id="ayam-kampung-betina" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Jantan Dewasa</label><input type="number" class="form-input" id="ayam-kampung-jantan" placeholder="0" min="0"></div>
+      </div>
+      <span class="sub-label">Ayam Serama</span>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Betina Serama</label><input type="number" class="form-input" id="ayam-serama-betina" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Jantan Serama</label><input type="number" class="form-input" id="ayam-serama-jantan" placeholder="0" min="0"></div>
+      </div>
+      <span class="sub-label">Ayam Philipin</span>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Betina</label><input type="number" class="form-input" id="ayam-philpin-betina" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Jantan</label><input type="number" class="form-input" id="ayam-philpin-jantan" placeholder="0" min="0"></div>
+      </div>
+      <span class="sub-label">Lainnya</span>
+      <div class="form-row triple">
+        <div class="form-group"><label class="form-label">Umbaran</label><input type="number" class="form-input" id="ayam-umbaran" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Box</label><input type="number" class="form-input" id="ayam-box" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">DOC</label><input type="number" class="form-input" id="ayam-doc" placeholder="0" min="0"></div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn-primary" id="btn-save-ayam" onclick="saveAyam()">💾 Simpan Data Ayam</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Riwayat Ayam Kampung</div>
+      <div class="table-wrap">
+        <table id="tbl-ayam">
+          <thead><tr><th>Tgl</th><th>K.Bet</th><th>K.Jan</th><th>S.Bet</th><th>S.Jan</th><th>P.Bet</th><th>P.Jan</th><th>Umbr</th><th>Box</th><th>DOC</th><th>Total</th><th></th></tr></thead>
+          <tbody id="tbody-ayam"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BEBEK -->
+  <div class="tab-content" id="tab-bebek">
+    <div class="card">
+      <div class="card-title">Input Data Bebek</div>
+      <div class="form-row single"><div class="form-group"><label class="form-label">Tanggal</label><input type="date" class="form-input" id="bebek-tgl"></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Bebek DOC</label><input type="number" class="form-input" id="bebek-doc" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Anak Bebek</label><input type="number" class="form-input" id="bebek-anak" placeholder="0" min="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Betina Dewasa</label><input type="number" class="form-input" id="bebek-betina" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Jantan Dewasa</label><input type="number" class="form-input" id="bebek-jantan" placeholder="0" min="0"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn btn-primary" id="btn-save-bebek" onclick="saveBebek()">💾 Simpan Data Bebek</button></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Riwayat Bebek</div>
+      <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>DOC</th><th>Anak</th><th>Betina</th><th>Jantan</th><th>Total</th><th></th></tr></thead><tbody id="tbody-bebek"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- MENTOK -->
+  <div class="tab-content" id="tab-mentok">
+    <div class="card">
+      <div class="card-title">Input Data Mentok</div>
+      <div class="form-row single"><div class="form-group"><label class="form-label">Tanggal</label><input type="date" class="form-input" id="mentok-tgl"></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mentok DOC</label><input type="number" class="form-input" id="mentok-doc" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Anakan Mentok</label><input type="number" class="form-input" id="mentok-anak" placeholder="0" min="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Betina Dewasa</label><input type="number" class="form-input" id="mentok-betina" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Jantan Dewasa</label><input type="number" class="form-input" id="mentok-jantan" placeholder="0" min="0"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn btn-primary" id="btn-save-mentok" onclick="saveMentok()">💾 Simpan Data Mentok</button></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Riwayat Mentok</div>
+      <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>DOC</th><th>Anak</th><th>Betina</th><th>Jantan</th><th>Total</th><th></th></tr></thead><tbody id="tbody-mentok"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ANGSA -->
+  <div class="tab-content" id="tab-angsa">
+    <div class="card">
+      <div class="card-title">Input Data Angsa</div>
+      <div class="form-row single"><div class="form-group"><label class="form-label">Tanggal</label><input type="date" class="form-input" id="angsa-tgl"></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Angsa DOC</label><input type="number" class="form-input" id="angsa-doc" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Betina Dewasa</label><input type="number" class="form-input" id="angsa-betina" placeholder="0" min="0"></div>
+      </div>
+      <div class="form-row single"><div class="form-group"><label class="form-label">Jantan Dewasa</label><input type="number" class="form-input" id="angsa-jantan" placeholder="0" min="0"></div></div>
+      <div style="margin-top:14px"><button class="btn btn-primary" id="btn-save-angsa" onclick="saveAngsa()">💾 Simpan Data Angsa</button></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Riwayat Angsa</div>
+      <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>DOC</th><th>Betina</th><th>Jantan</th><th>Total</th><th></th></tr></thead><tbody id="tbody-angsa"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PAGE: TELUR ===== -->
+<div class="page" id="page-telur">
+  <div class="section-header">
+    <div class="section-icon amber">🥚</div>
+    <div>
+      <div class="section-title">Data Telur</div>
+      <div class="section-sub">Rekap produksi telur harian</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Input Telur Harian</div>
+    <div class="form-row single"><div class="form-group"><label class="form-label">Tanggal</label><input type="date" class="form-input" id="telur-tgl"></div></div>
+    <span class="sub-label">Produksi Telur</span>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Ayam Petelur</label><input type="number" class="form-input" id="telur-ayam-petelur" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Ayam Kampung</label><input type="number" class="form-input" id="telur-ayam-kampung" placeholder="0" min="0"></div>
+    </div>
+    <div class="form-row triple">
+      <div class="form-group"><label class="form-label">Bebek</label><input type="number" class="form-input" id="telur-bebek" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Mentok</label><input type="number" class="form-input" id="telur-mentok" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Angsa</label><input type="number" class="form-input" id="telur-angsa" placeholder="0" min="0"></div>
+    </div>
+    <span class="sub-label">Distribusi Telur</span>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Dijual (butir)</label><input type="number" class="form-input" id="telur-jual" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Rusak (butir)</label><input type="number" class="form-input" id="telur-rusak" placeholder="0" min="0"></div>
+    </div>
+    <span class="sub-label">Mesin Tetas</span>
+    <div class="form-row triple">
+      <div class="form-group"><label class="form-label">Ayam</label><input type="number" class="form-input" id="telur-tetas-ayam" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Mentok/Angsa</label><input type="number" class="form-input" id="telur-tetas-mentok" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Bebek</label><input type="number" class="form-input" id="telur-tetas-bebek" placeholder="0" min="0"></div>
+    </div>
+    <div class="form-row single" style="margin-top:4px">
+      <div class="form-group"><label class="form-label">Keterangan</label><textarea class="form-input" id="telur-ket" placeholder="Opsional..."></textarea></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn btn-amber" id="btn-save-telur" onclick="saveTelur()">💾 Simpan Data Telur</button></div>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card accent">
+      <div class="s-label">Total Telur Hari Ini</div>
+      <div class="s-value" id="sum-telur-total">0</div>
+      <div class="s-unit">butir</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-label">Dijual Hari Ini</div>
+      <div class="s-value" id="sum-telur-jual">0</div>
+      <div class="s-unit">butir</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Riwayat Telur</div>
+    <div class="table-wrap">
+      <table><thead><tr><th>Tgl</th><th>Petelur</th><th>Kampung</th><th>Bebek</th><th>Mentok</th><th>Jual</th><th>Tetas</th><th>Rusak</th><th></th></tr></thead>
+      <tbody id="tbody-telur"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PAGE: KEUANGAN ===== -->
+<div class="page" id="page-kas">
+  <div class="section-header">
+    <div class="section-icon blue">💰</div>
+    <div>
+      <div class="section-title">Laporan Keuangan</div>
+      <div class="section-sub">Kas masuk & keluar</div>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchKasTab('kampung', this)">🐔 Kampung-Bebek</button>
+    <button class="tab-btn" onclick="switchKasTab('telur', this)">🥚 Penjualan Telur</button>
+    <button class="tab-btn" onclick="switchKasTab('petelur', this)">🐣 Ayam Petelur</button>
+    <button class="tab-btn" onclick="switchKasTab('boiler', this)">🍗 Ayam Boiler</button>
+  </div>
+  <div class="card">
+    <div class="card-title" id="kas-form-title">Transaksi — Ayam Kampung + Bebek</div>
+    <div class="form-row single"><div class="form-group"><label class="form-label">Tanggal</label><input type="date" class="form-input" id="kas-tgl"></div></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Harga Satuan (Rp)</label><input type="number" class="form-input" id="kas-harga" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Volume / Qty</label><input type="text" class="form-input" id="kas-volume" placeholder="cth: 10 Karung"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Kas Masuk (Rp)</label><input type="number" class="form-input" id="kas-masuk" placeholder="0" min="0"></div>
+      <div class="form-group"><label class="form-label">Kas Keluar (Rp)</label><input type="number" class="form-input" id="kas-keluar" placeholder="0" min="0"></div>
+    </div>
+    <div class="form-row single"><div class="form-group"><label class="form-label">Keterangan</label><textarea class="form-input" id="kas-ket" placeholder="Deskripsi transaksi..."></textarea></div></div>
+    <div style="margin-top:14px"><button class="btn btn-primary" id="btn-save-kas" onclick="saveKas()">💾 Simpan Transaksi</button></div>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><div class="s-label">Total Masuk</div><div class="s-value amount-pos" id="sum-kas-masuk">Rp 0</div></div>
+    <div class="summary-card"><div class="s-label">Total Keluar</div><div class="s-value amount-neg" id="sum-kas-keluar">Rp 0</div></div>
+  </div>
+  <div class="tab-content active" id="kastab-kampung">
+    <div class="card"><div class="card-title">Riwayat Kas Ayam Kampung + Bebek</div>
+    <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>Vol</th><th>Masuk</th><th>Keluar</th><th>Ket</th><th></th></tr></thead><tbody id="tbody-kas-kampung"></tbody></table></div></div>
+  </div>
+  <div class="tab-content" id="kastab-telur">
+    <div class="card"><div class="card-title">Riwayat Penjualan Telur</div>
+    <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>Vol</th><th>Masuk</th><th>Keluar</th><th>Ket</th><th></th></tr></thead><tbody id="tbody-kas-telur"></tbody></table></div></div>
+  </div>
+  <div class="tab-content" id="kastab-petelur">
+    <div class="card"><div class="card-title">Riwayat Kas Ayam Petelur</div>
+    <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>Vol</th><th>Masuk</th><th>Keluar</th><th>Ket</th><th></th></tr></thead><tbody id="tbody-kas-petelur"></tbody></table></div></div>
+  </div>
+  <div class="tab-content" id="kastab-boiler">
+    <div class="card"><div class="card-title">Riwayat Kas Ayam Boiler</div>
+    <div class="table-wrap"><table><thead><tr><th>Tgl</th><th>Vol</th><th>Masuk</th><th>Keluar</th><th>Ket</th><th></th></tr></thead><tbody id="tbody-kas-boiler"></tbody></table></div></div>
+  </div>
+</div>
+
+<!-- ===== PAGE: EXPORT ===== -->
+<div class="page" id="page-io">
+  <div class="section-header">
+    <div class="section-icon blue">📁</div>
+    <div>
+      <div class="section-title">Export Data</div>
+      <div class="section-sub">Unduh laporan Excel</div>
+    </div>
+  </div>
+
+  <div class="info-chip">
+    💡 Data disimpan langsung ke Google Sheets secara otomatis setiap kali kamu menekan tombol Simpan. Halaman ini hanya untuk mengunduh salinan Excel.
+  </div>
+
+  <div class="card">
+    <div class="card-title">📤 Export ke Excel</div>
+    <p style="font-size:13px; color:var(--text-soft); margin-bottom:14px; line-height:1.6">
+      Semua data akan diekspor ke file Excel dengan <strong>9 sheet</strong> — satu per kategori ternak, telur, dan keuangan.
+    </p>
+    <button class="btn btn-primary" onclick="exportExcel()">📊 Unduh File Excel</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Ringkasan Data di Sheets</div>
+    <div id="data-summary-list" style="font-size:13px; line-height:2.2; color:var(--text-soft)">
+      <em>Memuat...</em>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn btn-outline" onclick="reloadData()">🔄 Refresh Data</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <button class="nav-item active" onclick="showPage('ternak', this)"><span class="nav-icon">🐔</span><span class="nav-label">Ternak</span></button>
+  <button class="nav-item" onclick="showPage('telur', this)"><span class="nav-icon">🥚</span><span class="nav-label">Telur</span></button>
+  <button class="nav-item" onclick="showPage('kas', this)"><span class="nav-icon">💰</span><span class="nav-label">Keuangan</span></button>
+  <button class="nav-item" onclick="showPage('io', this)"><span class="nav-icon">📁</span><span class="nav-label">Export</span></button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// 🔧 GANTI URL INI dengan URL deployment Apps Script kamu
+// ══════════════════════════════════════════════════════
+const SHEETS_URL = 'PASTE_URL_DISINI';
+// Contoh: 'https://script.google.com/macros/s/AKfycbxXXXXX/exec'
+// ══════════════════════════════════════════════════════
+
+// ── IN-MEMORY DATA STORE ──
+let ayamData   = [];
+let bebekData  = [];
+let mentokData = [];
+let angsaData  = [];
+let telurData  = [];
+let kasData    = { kampung: [], telur: [], petelur: [], boiler: [] };
+
+let currentKasTab = 'kampung';
+
+// ── SYNC STATUS ──
+function setSyncStatus(state) { // 'ok' | 'syncing' | 'error'
+  const dot   = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  dot.className = 'sync-dot' + (state !== 'ok' ? ' ' + state : '');
+  label.textContent = state === 'syncing' ? 'Menyimpan...' : state === 'error' ? 'Error' : 'Tersinkron';
+}
+
+// ── LOADING OVERLAY ──
+function showLoading(show) {
+  document.getElementById('loading-overlay').classList.toggle('hidden', !show);
+}
+
+// ── GOOGLE SHEETS API ──
+async function sheetsGet(params) {
+  if (!SHEETS_URL || SHEETS_URL === 'https://script.google.com/macros/s/AKfycbwJNR9_8a_JSzT6YYiqsJYOezDbpP-5uuIUc7a6_ZYISQbDvkM8Yk3rw7SHQAg0nVYF/exec') {
+    throw new Error('URL Google Sheets belum diisi di kode!');
+  }
+  const url = SHEETS_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+async function loadAllData() {
+  setSyncStatus('syncing');
+  try {
+    const data = await sheetsGet({ action: 'getAll' });
+    ayamData           = data.ayam        || [];
+    bebekData          = data.bebek       || [];
+    mentokData         = data.mentok      || [];
+    angsaData          = data.angsa       || [];
+    telurData          = data.telur       || [];
+    kasData.kampung    = data.kas_kampung || [];
+    kasData.telur      = data.kas_telur   || [];
+    kasData.petelur    = data.kas_petelur || [];
+    kasData.boiler     = data.kas_boiler  || [];
+    renderAll();
+    updateDataSummary();
+    setSyncStatus('ok');
+  } catch(err) {
+    setSyncStatus('error');
+    toast('❌ Gagal memuat: ' + err.message);
+  }
+}
+
+async function sheetsAdd(type, row) {
+  setSyncStatus('syncing');
+  try {
+    await sheetsGet({ action: 'add', type, data: JSON.stringify(row) });
+    setSyncStatus('ok');
+  } catch(err) {
+    setSyncStatus('error');
+    toast('⚠️ Tersimpan di layar, gagal ke Sheets: ' + err.message);
+  }
+}
+
+async function sheetsDelete(type, id) {
+  setSyncStatus('syncing');
+  try {
+    await sheetsGet({ action: 'delete', type, id });
+    setSyncStatus('ok');
+  } catch(err) {
+    setSyncStatus('error');
+    toast('⚠️ Hapus gagal sync: ' + err.message);
+  }
+}
+
+async function reloadData() {
+  showLoading(true);
+  await loadAllData();
+  showLoading(false);
+  toast('🔄 Data diperbarui dari Sheets');
+}
+
+// ── ID GENERATOR ──
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+// ── HELPERS ──
+function formatDateDisp(d) {
+  if(!d) return '-';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('id-ID', { weekday:'short', day:'2-digit', month:'long', year:'numeric' });
+}
+function shortDate(d) {
+  if(!d) return '-';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('id-ID', { day:'2-digit', month:'2-digit', year:'2-digit' });
+}
+function parseNum(id) { return parseInt(document.getElementById(id).value) || 0; }
+function parseStr(id) { return document.getElementById(id).value.trim(); }
+function rupiah(n)    { return 'Rp ' + Number(n).toLocaleString('id-ID'); }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function setBtnLoading(id, loading) {
+  const btn = document.getElementById(id);
+  if(!btn) return;
+  btn.disabled = loading;
+  if(loading) btn.dataset.orig = btn.textContent, btn.textContent = '⏳ Menyimpan...';
+  else btn.textContent = btn.dataset.orig || btn.textContent;
+}
+
+function makeDelBtn(fn) {
+  const b = document.createElement('button');
+  b.className = 'del-btn'; b.textContent = '✕'; b.onclick = fn;
+  return b;
+}
+
+// ── NAVIGATION ──
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if(name === 'io') updateDataSummary();
+}
+
+function switchTernakTab(name, btn) {
+  document.querySelectorAll('#page-ternak .tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-ternak .tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function switchKasTab(name, btn) {
+  currentKasTab = name;
+  document.querySelectorAll('#page-kas .tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-kas .tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('kastab-' + name).classList.add('active');
+  btn.classList.add('active');
+  const titles = { kampung:'Ayam Kampung + Bebek', telur:'Penjualan Telur', petelur:'Ayam Petelur', boiler:'Ayam Boiler' };
+  document.getElementById('kas-form-title').textContent = 'Transaksi — ' + titles[name];
+  updateKasSummary();
+}
+
+// ── SAVE FUNCTIONS ──
+async function saveAyam() {
+  const tgl = parseStr('ayam-tgl');
+  if(!tgl) { toast('⚠️ Isi tanggal dulu'); return; }
+  const row = {
+    id: genId(), tgl,
+    kb: parseNum('ayam-kampung-betina'), kj: parseNum('ayam-kampung-jantan'),
+    sb: parseNum('ayam-serama-betina'),  sj: parseNum('ayam-serama-jantan'),
+    pb: parseNum('ayam-philpin-betina'), pj: parseNum('ayam-philpin-jantan'),
+    um: parseNum('ayam-umbaran'), bx: parseNum('ayam-box'), dc: parseNum('ayam-doc')
+  };
+  row.total = row.kb+row.kj+row.sb+row.sj+row.pb+row.pj+row.um+row.bx+row.dc;
+  ayamData.push(row); ayamData.sort((a,b)=>String(a.tgl).localeCompare(String(b.tgl)));
+  renderAyam(); toast('✅ Data ayam tersimpan');
+  setBtnLoading('btn-save-ayam', true);
+  await sheetsAdd('ayam', row);
+  setBtnLoading('btn-save-ayam', false);
+  updateDataSummary();
+}
+
+async function saveBebek() {
+  const tgl = parseStr('bebek-tgl');
+  if(!tgl) { toast('⚠️ Isi tanggal dulu'); return; }
+  const row = { id: genId(), tgl, doc: parseNum('bebek-doc'), anak: parseNum('bebek-anak'), betina: parseNum('bebek-betina'), jantan: parseNum('bebek-jantan') };
+  row.total = row.doc+row.anak+row.betina+row.jantan;
+  bebekData.push(row); bebekData.sort((a,b)=>String(a.tgl).localeCompare(String(b.tgl)));
+  renderBebek(); toast('✅ Data bebek tersimpan');
+  setBtnLoading('btn-save-bebek', true);
+  await sheetsAdd('bebek', row);
+  setBtnLoading('btn-save-bebek', false);
+  updateDataSummary();
+}
+
+async function saveMentok() {
+  const tgl = parseStr('mentok-tgl');
+  if(!tgl) { toast('⚠️ Isi tanggal dulu'); return; }
+  const row = { id: genId(), tgl, doc: parseNum('mentok-doc'), anak: parseNum('mentok-anak'), betina: parseNum('mentok-betina'), jantan: parseNum('mentok-jantan') };
+  row.total = row.doc+row.anak+row.betina+row.jantan;
+  mentokData.push(row); mentokData.sort((a,b)=>String(a.tgl).localeCompare(String(b.tgl)));
+  renderMentok(); toast('✅ Data mentok tersimpan');
+  setBtnLoading('btn-save-mentok', true);
+  await sheetsAdd('mentok', row);
+  setBtnLoading('btn-save-mentok', false);
+  updateDataSummary();
+}
+
+async function saveAngsa() {
+  const tgl = parseStr('angsa-tgl');
+  if(!tgl) { toast('⚠️ Isi tanggal dulu'); return; }
+  const row = { id: genId(), tgl, doc: parseNum('angsa-doc'), betina: parseNum('angsa-betina'), jantan: parseNum('angsa-jantan') };
+  row.total = row.doc+row.betina+row.jantan;
+  angsaData.push(row); angsaData.sort((a,b)=>String(a.tgl).localeCompare(String(b.tgl)));
+  renderAngsa(); toast('✅ Data angsa tersimpan');
+  setBtnLoading('btn-save-angsa', true);
+  await sheetsAdd('angsa', row);
+  setBtnLoading('btn-save-angsa', false);
+  updateDataSummary();
+}
+
+async function saveTelur() {
+  const tgl = parseStr('telur-tgl');
+  if(!tgl) { toast('⚠️ Isi tanggal dulu'); return; }
+  const row = {
+    id: genId(), tgl,
+    ap: parseNum('telur-ayam-petelur'), ak: parseNum('telur-ayam-kampung'),
+    bb: parseNum('telur-bebek'), mt: parseNum('telur-mentok'), ag: parseNum('telur-angsa'),
+    jual: parseNum('telur-jual'), rusak: parseNum('telur-rusak'),
+    tetasAyam: parseNum('telur-tetas-ayam'), tetasMentok: parseNum('telur-tetas-mentok'), tetasBebek: parseNum('telur-tetas-bebek'),
+    ket: parseStr('telur-ket')
+  };
+  row.total = row.ap+row.ak+row.bb+row.mt+row.ag;
+  row.tetas = row.tetasAyam+row.tetasMentok+row.tetasBebek;
+  telurData.push(row); telurData.sort((a,b)=>String(a.tgl).localeCompare(String(b.tgl)));
+  renderTelur(); toast('✅ Data telur tersimpan');
+  setBtnLoading('btn-save-telur', true);
+  await sheetsAdd('telur', row);
+  setBtnLoading('btn-save-telur', false);
+  updateDataSummary();
+}
+
+async function saveKas() {
+  const tgl = parseStr('kas-tgl');
+  if(!tgl) { toast('⚠️ Isi tanggal dulu'); return; }
+  const row = {
+    id: genId(), tgl,
+    harga:  parseInt(document.getElementById('kas-harga').value)||0,
+    volume: parseStr('kas-volume'),
+    masuk:  parseInt(document.getElementById('kas-masuk').value)||0,
+    keluar: parseInt(document.getElementById('kas-keluar').value)||0,
+    ket:    parseStr('kas-ket')
+  };
+  row.total = row.masuk - row.keluar;
+  kasData[currentKasTab].push(row);
+  kasData[currentKasTab].sort((a,b)=>String(a.tgl).localeCompare(String(b.tgl)));
+  renderKas(); updateKasSummary(); toast('✅ Transaksi tersimpan');
+  setBtnLoading('btn-save-kas', true);
+  await sheetsAdd('kas_' + currentKasTab, row);
+  setBtnLoading('btn-save-kas', false);
+  updateDataSummary();
+}
+
+// ── RENDER FUNCTIONS ──
+function renderAll() { renderAyam(); renderBebek(); renderMentok(); renderAngsa(); renderTelur(); renderKas(); updateKasSummary(); }
+
+function renderAyam() {
+  const tb = document.getElementById('tbody-ayam');
+  if(!ayamData.length) { tb.innerHTML = '<tr><td colspan="12" class="no-data">Belum ada data</td></tr>'; return; }
+  tb.innerHTML = ayamData.map((r,i) => `
+    <tr>
+      <td>${shortDate(r.tgl)}</td>
+      <td>${r.kb||0}</td><td>${r.kj||0}</td><td>${r.sb||0}</td><td>${r.sj||0}</td>
+      <td>${r.pb||0}</td><td>${r.pj||0}</td><td>${r.um||0}</td><td>${r.bx||0}</td><td>${r.dc||0}</td>
+      <td><strong>${r.total||0}</strong></td>
+      <td id="delayam${i}"></td>
+    </tr>`).join('');
+  ayamData.forEach((r,i) => {
+    const td = document.getElementById('delayam'+i);
+    if(td) td.appendChild(makeDelBtn(() => {
+      const rowId = r.id;
+      const idx = ayamData.findIndex(x => x.id === rowId);
+      if(idx !== -1) ayamData.splice(idx, 1);
+      renderAyam(); updateDataSummary();
+      sheetsDelete('ayam', rowId);
+    }));
+  });
+}
+
+function renderBebek() {
+  const tb = document.getElementById('tbody-bebek');
+  if(!bebekData.length) { tb.innerHTML = '<tr><td colspan="7" class="no-data">Belum ada data</td></tr>'; return; }
+  tb.innerHTML = bebekData.map((r,i) => `
+    <tr><td>${shortDate(r.tgl)}</td><td>${r.doc||0}</td><td>${r.anak||0}</td><td>${r.betina||0}</td><td>${r.jantan||0}</td>
+    <td><strong>${r.total||0}</strong></td><td id="delbebek${i}"></td></tr>`).join('');
+  bebekData.forEach((r,i) => {
+    const td = document.getElementById('delbebek'+i);
+    if(td) td.appendChild(makeDelBtn(() => {
+      const rowId = r.id; const idx = bebekData.findIndex(x=>x.id===rowId);
+      if(idx!==-1) bebekData.splice(idx,1); renderBebek(); updateDataSummary(); sheetsDelete('bebek', rowId);
+    }));
+  });
+}
+
+function renderMentok() {
+  const tb = document.getElementById('tbody-mentok');
+  if(!mentokData.length) { tb.innerHTML = '<tr><td colspan="7" class="no-data">Belum ada data</td></tr>'; return; }
+  tb.innerHTML = mentokData.map((r,i) => `
+    <tr><td>${shortDate(r.tgl)}</td><td>${r.doc||0}</td><td>${r.anak||0}</td><td>${r.betina||0}</td><td>${r.jantan||0}</td>
+    <td><strong>${r.total||0}</strong></td><td id="delmentok${i}"></td></tr>`).join('');
+  mentokData.forEach((r,i) => {
+    const td = document.getElementById('delmentok'+i);
+    if(td) td.appendChild(makeDelBtn(() => {
+      const rowId = r.id; const idx = mentokData.findIndex(x=>x.id===rowId);
+      if(idx!==-1) mentokData.splice(idx,1); renderMentok(); updateDataSummary(); sheetsDelete('mentok', rowId);
+    }));
+  });
+}
+
+function renderAngsa() {
+  const tb = document.getElementById('tbody-angsa');
+  if(!angsaData.length) { tb.innerHTML = '<tr><td colspan="6" class="no-data">Belum ada data</td></tr>'; return; }
+  tb.innerHTML = angsaData.map((r,i) => `
+    <tr><td>${shortDate(r.tgl)}</td><td>${r.doc||0}</td><td>${r.betina||0}</td><td>${r.jantan||0}</td>
+    <td><strong>${r.total||0}</strong></td><td id="delangsa${i}"></td></tr>`).join('');
+  angsaData.forEach((r,i) => {
+    const td = document.getElementById('delangsa'+i);
+    if(td) td.appendChild(makeDelBtn(() => {
+      const rowId = r.id; const idx = angsaData.findIndex(x=>x.id===rowId);
+      if(idx!==-1) angsaData.splice(idx,1); renderAngsa(); updateDataSummary(); sheetsDelete('angsa', rowId);
+    }));
+  });
+}
+
+function renderTelur() {
+  const tb = document.getElementById('tbody-telur');
+  if(!telurData.length) { tb.innerHTML = '<tr><td colspan="9" class="no-data">Belum ada data</td></tr>'; return; }
+  tb.innerHTML = telurData.map((r,i) => `
+    <tr><td>${shortDate(r.tgl)}</td><td>${r.ap||0}</td><td>${r.ak||0}</td><td>${r.bb||0}</td><td>${r.mt||0}</td>
+    <td>${r.jual||0}</td><td>${r.tetas||0}</td><td>${r.rusak||0}</td>
+    <td id="deltelur${i}"></td></tr>`).join('');
+  telurData.forEach((r,i) => {
+    const td = document.getElementById('deltelur'+i);
+    if(td) td.appendChild(makeDelBtn(() => {
+      const rowId = r.id; const idx = telurData.findIndex(x=>x.id===rowId);
+      if(idx!==-1) telurData.splice(idx,1); renderTelur(); updateDataSummary(); sheetsDelete('telur', rowId);
+    }));
+  });
+  const today = new Date().toISOString().split('T')[0];
+  const todayRows = telurData.filter(r => String(r.tgl) === today);
+  document.getElementById('sum-telur-total').textContent = todayRows.reduce((s,r)=>s+(Number(r.total)||0),0);
+  document.getElementById('sum-telur-jual').textContent  = todayRows.reduce((s,r)=>s+(Number(r.jual)||0), 0);
+}
+
+function renderKas() {
+  ['kampung','telur','petelur','boiler'].forEach(key => {
+    const tb = document.getElementById('tbody-kas-' + key);
+    const d  = kasData[key];
+    if(!d.length) { tb.innerHTML = '<tr><td colspan="6" class="no-data">Belum ada data</td></tr>'; return; }
+    tb.innerHTML = d.map((r,i) => `
+      <tr>
+        <td>${shortDate(r.tgl)}</td>
+        <td style="font-size:11px">${r.volume||'-'}</td>
+        <td class="amount-pos">${r.masuk ? rupiah(r.masuk) : '-'}</td>
+        <td class="amount-neg">${r.keluar ? rupiah(r.keluar) : '-'}</td>
+        <td style="font-size:11px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.ket||'-'}</td>
+        <td id="delkas_${key}_${i}"></td>
+      </tr>`).join('');
+    d.forEach((r,i) => {
+      const td = document.getElementById(`delkas_${key}_${i}`);
+      if(td) td.appendChild(makeDelBtn(() => {
+        const rowId = r.id; const idx = kasData[key].findIndex(x=>x.id===rowId);
+        if(idx!==-1) kasData[key].splice(idx,1);
+        renderKas(); updateKasSummary(); updateDataSummary();
+        sheetsDelete('kas_'+key, rowId);
+      }));
+    });
+  });
+}
+
+function updateKasSummary() {
+  const d = kasData[currentKasTab];
+  document.getElementById('sum-kas-masuk').textContent  = rupiah(d.reduce((s,r)=>s+(Number(r.masuk)||0),0));
+  document.getElementById('sum-kas-keluar').textContent = rupiah(d.reduce((s,r)=>s+(Number(r.keluar)||0),0));
+}
+
+function updateDataSummary() {
+  document.getElementById('data-summary-list').innerHTML = `
+    🐔 Ayam Kampung: <strong>${ayamData.length} entri</strong><br>
+    🦆 Bebek: <strong>${bebekData.length} entri</strong><br>
+    🦢 Mentok: <strong>${mentokData.length} entri</strong><br>
+    🪿 Angsa: <strong>${angsaData.length} entri</strong><br>
+    🥚 Telur: <strong>${telurData.length} entri</strong><br>
+    💰 Kas Kampung-Bebek: <strong>${kasData.kampung.length} transaksi</strong><br>
+    💰 Penjualan Telur: <strong>${kasData.telur.length} transaksi</strong><br>
+    💰 Kas Petelur: <strong>${kasData.petelur.length} transaksi</strong><br>
+    💰 Kas Boiler: <strong>${kasData.boiler.length} transaksi</strong>
+  `;
+}
+
+// ── EXPORT EXCEL ──
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet Ayam
+  const wsAyam = XLSX.utils.aoa_to_sheet([
+    ['DATA JUMLAH AYAM KAMPUNG'],
+    [],
+    ['Tgl','K.Betina','K.Jantan','S.Betina','S.Jantan','P.Betina','P.Jantan','Umbaran','Box','DOC','Total'],
+    ...ayamData.map(r => [r.tgl,r.kb,r.kj,r.sb,r.sj,r.pb,r.pj,r.um,r.bx,r.dc,r.total])
+  ]);
+  wsAyam['!cols'] = Array(11).fill({wch:12});
+  XLSX.utils.book_append_sheet(wb, wsAyam, 'Data Ayam Kampung');
+
+  // Sheet Bebek
+  const wsBebek = XLSX.utils.aoa_to_sheet([
+    ['DATA JUMLAH BEBEK'],
+    [],
+    ['Tgl','DOC','Anak','Betina','Jantan','Total'],
+    ...bebekData.map(r => [r.tgl,r.doc,r.anak,r.betina,r.jantan,r.total])
+  ]);
+  XLSX.utils.book_append_sheet(wb, wsBebek, 'Data Bebek');
+
+  // Sheet Mentok
+  const wsMentok = XLSX.utils.aoa_to_sheet([
+    ['DATA JUMLAH MENTOK'],
+    [],
+    ['Tgl','DOC','Anak','Betina','Jantan','Total'],
+    ...mentokData.map(r => [r.tgl,r.doc,r.anak,r.betina,r.jantan,r.total])
+  ]);
+  XLSX.utils.book_append_sheet(wb, wsMentok, 'Data Mentok');
+
+  // Sheet Angsa
+  const wsAngsa = XLSX.utils.aoa_to_sheet([
+    ['DATA JUMLAH ANGSA'],
+    [],
+    ['Tgl','DOC','Betina','Jantan','Total'],
+    ...angsaData.map(r => [r.tgl,r.doc,r.betina,r.jantan,r.total])
+  ]);
+  XLSX.utils.book_append_sheet(wb, wsAngsa, 'Data Angsa');
+
+  // Sheet Telur
+  const wsTelur = XLSX.utils.aoa_to_sheet([
+    ['REKAPITULASI JUMLAH TELUR'],
+    [],
+    ['Tgl','Petelur','Kampung','Bebek','Mentok','Angsa','Dijual','TetasAyam','TetasMentok','TetasBebek','Rusak','Total','Keterangan'],
+    ...telurData.map(r => [r.tgl,r.ap,r.ak,r.bb,r.mt,r.ag,r.jual,r.tetasAyam,r.tetasMentok,r.tetasBebek,r.rusak,r.total,r.ket])
+  ]);
+  wsTelur['!cols'] = Array(13).fill({wch:13});
+  XLSX.utils.book_append_sheet(wb, wsTelur, 'Data Telur');
+
+  // Helper Kas sheet
+  function makeKasSheet(data, title) {
+    const tMasuk  = data.reduce((s,r)=>s+(Number(r.masuk)||0),0);
+    const tKeluar = data.reduce((s,r)=>s+(Number(r.keluar)||0),0);
+    const ws = XLSX.utils.aoa_to_sheet([
+      [title], [],
+      ['Tanggal','Harga Satuan','Volume','Kas Masuk','Kas Keluar','Total','Keterangan'],
+      ...data.map(r=>[r.tgl,r.harga||0,r.volume||'',r.masuk||0,r.keluar||0,(r.masuk||0)-(r.keluar||0),r.ket||'']),
+      [],
+      ['','','TOTAL',tMasuk,tKeluar,tMasuk-tKeluar,'']
+    ]);
+    ws['!cols'] = [{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:30}];
+    return ws;
+  }
+
+  XLSX.utils.book_append_sheet(wb, makeKasSheet(kasData.kampung, 'LAPORAN KEUANGAN AYAM KAMPUNG + BEBEK'), 'Kas Kampung-Bebek');
+  XLSX.utils.book_append_sheet(wb, makeKasSheet(kasData.telur,   'LAPORAN KEUANGAN PENJUALAN TELUR'),     'Penjualan Telur');
+  XLSX.utils.book_append_sheet(wb, makeKasSheet(kasData.petelur, 'LAPORAN KEUANGAN AYAM PETELUR'),        'Ayam Petelur');
+  XLSX.utils.book_append_sheet(wb, makeKasSheet(kasData.boiler,  'LAPORAN KEUANGAN AYAM BOILER'),         'Kas Ayam Boiler');
+
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `Laporan_Ternak_${today}.xlsx`);
+  toast('📊 File Excel berhasil diunduh!');
+}
+
+// ── INIT ──
+async function init() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('todayDate').textContent = formatDateDisp(today);
+  ['ayam','bebek','mentok','angsa','telur','kas'].forEach(id => {
+    const el = document.getElementById(id+'-tgl');
+    if(el) el.value = today;
+  });
+  await loadAllData();
+  showLoading(false);
+}
+
+init();
+</script>
+</body>
+</html>
